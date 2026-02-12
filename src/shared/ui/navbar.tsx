@@ -30,30 +30,42 @@ export function Navbar({ session }: NavbarProps) {
               Admin
             </Link>
 
-            {session && (
-              <div className="flex gap-6">
-                <Link
-                  href="/dashboard"
-                  className={`transition-colors ${
-                    isActive('/dashboard')
-                      ? 'border-b-2 border-indigo-600 text-indigo-600'
-                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-                  }`}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/members"
-                  className={`transition-colors ${
-                    isActive('/members')
-                      ? 'border-b-2 border-indigo-600 text-indigo-600'
-                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-                  }`}
-                >
-                  Members
-                </Link>
-              </div>
-            )}
+            <div className="flex gap-6">
+              <Link
+                href="/blog"
+                className={`transition-colors ${
+                  isActive('/blog')
+                    ? 'border-b-2 border-indigo-600 text-indigo-600'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+              >
+                Blog
+              </Link>
+              {session && (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className={`transition-colors ${
+                      isActive('/dashboard')
+                        ? 'border-b-2 border-indigo-600 text-indigo-600'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/members"
+                    className={`transition-colors ${
+                      isActive('/members')
+                        ? 'border-b-2 border-indigo-600 text-indigo-600'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    Members
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
