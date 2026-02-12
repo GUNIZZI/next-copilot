@@ -2,54 +2,71 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useBlogStore } from '@/features/blog/model/blog-store';
 import { PostCard } from '@/features/blog/ui/post-card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { BlogPost } from '@/entities/blog/types';
+import { blogService } from '@/shared/services/firebase.service';
 
 export default function BlogPage() {
+  const { data: session } = useSession();
   const { posts, setPosts } = useBlogStore();
   const [filter, setFilter] = useState<'all' | 'portfolio' | 'tech'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 초기 데이터 로드 (나중에 API로 변경)
+  // Firebase에서 데이터 로드
   useEffect(() => {
-    const mockPosts: BlogPost[] = [
-      {
-        id: '1',
-        title: 'Next.js 16 업그레이드 가이드',
-        content: '<p>Next.js 16의 새로운 기능들...</p>',
-        excerpt:
-          'Next.js 16으로 업그레이드하면서 겪었던 경험과 팁을 공유합니다.',
-        coverImage:
-          'https://images.unsplash.com/photo-1633356122544-f134324ef6db?w=600&h=300&fit=crop',
-        category: 'tech',
-        tags: ['Next.js', 'React', 'TypeScript'],
-        authorId: 'user1',
-        createdAt: new Date('2024-02-01'),
-        updatedAt: new Date('2024-02-01'),
-        published: true,
-        views: 245,
-      },
-      {
-        id: '2',
-        title: '포트폴리오 프로젝트 - Admin Dashboard',
-        content: '<p>NextAuth를 사용한 인증 시스템...</p>',
-        excerpt:
-          'Next.js와 NextAuth.js를 사용하여 만든 Admin Dashboard 프로젝트입니다.',
-        coverImage:
-          'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&h=300&fit=crop',
-        category: 'portfolio',
-        tags: ['Next.js', 'TypeScript', 'TailwindCSS'],
-        authorId: 'user1',
-        createdAt: new Date('2024-01-15'),
-        updatedAt: new Date('2024-01-15'),
-        published: true,
-        views: 432,
-      },
-    ];
-    setPosts(mockPosts);
+    const loadPosts = async () => {
+      try {
+        const firebasePosts = await blogService.getAllPosts();
+        if (firebasePosts.length > 0) {
+          setPosts(firebasePosts);
+        } else {
+          // Firebase에 데이터가 없으면 모의 데이터 사용
+          const mockPosts: BlogPost[] = [
+            {
+              id: '1',
+              title: 'Next.js 16 업그레이드 가이드',
+              content: '<p>Next.js 16의 새로운 기능들...</p>',
+              excerpt:
+                'Next.js 16으로 업그레이드하면서 겪었던 경험과 팁을 공유합니다.',
+              coverImage:
+                'https://images.unsplash.com/photo-1633356122544-f134324ef6db?w=600&h=300&fit=crop',
+              category: 'tech',
+              tags: ['Next.js', 'React', 'TypeScript'],
+              authorId: 'user1',
+              createdAt: new Date('2024-02-01'),
+              updatedAt: new Date('2024-02-01'),
+              published: true,
+              views: 245,
+            },
+            {
+              id: '2',
+              title: '포트폴리오 프로젝트 - Admin Dashboard',
+              content: '<p>NextAuth를 사용한 인증 시스템...</p>',
+              excerpt:
+                'Next.js와 NextAuth.js를 사용하여 만든 Admin Dashboard 프로젝트입니다.',
+              coverImage:
+                'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&h=300&fit=crop',
+              category: 'portfolio',
+              tags: ['Next.js', 'TypeScript', 'TailwindCSS'],
+              authorId: 'user1',
+              createdAt: new Date('2024-01-15'),
+              updatedAt: new Date('2024-01-15'),
+              published: true,
+              views: 432,
+            },
+          ];
+          setPosts(mockPosts);
+        }
+      } catch (error) {
+        console.error('블로그 글 로드 실패:', error);
+      }
+    };
+
+    loadPosts();
   }, [setPosts]);
 
   const filteredPosts = posts.filter((post) => {
@@ -72,11 +89,13 @@ export default function BlogPage() {
             포트폴리오와 기술 관련 글들을 공유합니다.
           </p>
 
-          <Link href="/blog/create">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />새 글 작성
-            </Button>
-          </Link>
+          {session && (
+            <Link href="/blog/create">
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />새 글 작성
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* 필터 & 검색 */}

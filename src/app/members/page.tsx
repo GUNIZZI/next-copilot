@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { userService } from '@/shared/services/firebase.service';
 
 interface Member {
   id: string;
@@ -17,80 +18,83 @@ interface Member {
 export default function MembersPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [members, setMembers] = useState<Member[]>([
-    {
-      id: '1',
-      name: 'Admin User',
-      email: 'admin@example.com',
-      role: 'admin',
-      status: 'active',
-      joinDate: '2024-01-15',
-    },
-    {
-      id: '2',
-      name: 'John Doe',
-      email: 'john@example.com',
-      role: 'user',
-      status: 'active',
-      joinDate: '2024-02-10',
-    },
-    {
-      id: '3',
-      name: 'Jane Smith',
-      email: 'jane@example.com',
-      role: 'user',
-      status: 'active',
-      joinDate: '2024-02-12',
-    },
-    {
-      id: '4',
-      name: 'Bob Wilson',
-      email: 'bob@example.com',
-      role: 'user',
-      status: 'inactive',
-      joinDate: '2024-01-20',
-    },
-  ]);
+  const [members, setMembers] = useState<Member[]>([]);
 
   const [showForm, setShowForm] = useState(false);
   const [newMember, setNewMember] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'user' as 'user' | 'admin',
   });
+
+  const loadMembers = async () => {
+    try {
+      const firebaseUsers = await userService.getAllUsers();
+      if (firebaseUsers.length > 0) {
+        const mappedMembers: Member[] = firebaseUsers.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: 'active',
+          joinDate:
+            user.createdAt?.toISOString?.().split('T')[0] ||
+            new Date().toISOString().split('T')[0],
+        }));
+        setMembers(mappedMembers);
+      }
+    } catch (error) {
+      console.error('회원 정보 로드 실패:', error);
+    }
+  };
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
+    } else if (session?.user?.role !== 'admin') {
+      router.push('/');
+    } else {
+      // Firebase에서 회원 정보 로드
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadMembers();
     }
-  }, [status, router]);
+  }, [status, router, session]);
 
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return null;
-  }
-
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    const member: Member = {
-      id: String(members.length + 1),
-      ...newMember,
-      status: 'active',
-      joinDate: new Date().toISOString().split('T')[0],
-    };
-    setMembers([...members, member]);
-    setNewMember({ name: '', email: '', role: 'user' });
-    setShowForm(false);
+    try {
+      if (!newMember.password) {
+        alert('비밀번호를 입력해주세요.');
+        return;
+      }
+      const newUserId = await userService.createUser({
+        name: newMember.name,
+        email: newMember.email,
+        password: newMember.password,
+        role: newMember.role,
+      });
+
+      const member: Member = {
+        id: newUserId,
+        name: newMember.name,
+        email: newMember.email,
+        role: newMember.role,
+        status: 'active',
+        joinDate: new Date().toISOString().split('T')[0],
+      };
+      setMembers([...members, member]);
+      setNewMember({ name: '', email: '', password: '', role: 'user' });
+      setShowForm(false);
+      alert('회원이 추가되었습니다!');
+    } catch (error) {
+      console.error('회원 추가 실패:', error);
+      alert('회원 추가 중 오류가 발생했습니다.');
+    }
   };
 
-  const toggleMemberStatus = (id: string) => {
+  const toggleMemberStatus = async (id: string) => {
+    // 상태 업데이트 (실제로는 status 필드가 필요)
     setMembers(
       members.map((m) =>
         m.id === id
@@ -100,8 +104,17 @@ export default function MembersPage() {
     );
   };
 
-  const deleteMember = (id: string) => {
-    setMembers(members.filter((m) => m.id !== id));
+  const deleteMember = async (id: string) => {
+    if (confirm('정말 이 회원을 삭제하시겠습니까?')) {
+      try {
+        await userService.deleteUser(id);
+        setMembers(members.filter((m) => m.id !== id));
+        alert('회원이 삭제되었습니다!');
+      } catch (error) {
+        console.error('회원 삭제 실패:', error);
+        alert('회원 삭제 중 오류가 발생했습니다.');
+      }
+    }
   };
 
   return (
@@ -160,23 +173,40 @@ export default function MembersPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Role
-                </label>
-                <select
-                  value={newMember.role}
-                  onChange={(e) =>
-                    setNewMember({
-                      ...newMember,
-                      role: e.target.value as 'user' | 'admin',
-                    })
-                  }
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-black dark:border-gray-600 dark:bg-slate-700 dark:text-white"
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newMember.password}
+                    onChange={(e) =>
+                      setNewMember({ ...newMember, password: e.target.value })
+                    }
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-black placeholder-gray-400 dark:border-gray-600 dark:bg-slate-700 dark:text-white"
+                    placeholder="Password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Role
+                  </label>
+                  <select
+                    value={newMember.role}
+                    onChange={(e) =>
+                      setNewMember({
+                        ...newMember,
+                        role: e.target.value as 'user' | 'admin',
+                      })
+                    }
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-black dark:border-gray-600 dark:bg-slate-700 dark:text-white"
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
               </div>
               <Button type="submit" className="w-full">
                 Add Member

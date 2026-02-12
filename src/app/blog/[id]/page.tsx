@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useBlogStore } from '@/features/blog/model/blog-store';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Calendar, Eye, Edit2, Trash2, Tag } from 'lucide-react';
@@ -9,6 +10,7 @@ import { ArrowLeft, Calendar, Eye, Edit2, Trash2, Tag } from 'lucide-react';
 export default function BlogDetailPage() {
   const params = useParams();
   const postId = (params?.id as string) || '';
+  const { data: session } = useSession();
   const { posts, deletePost } = useBlogStore();
 
   const post = posts.find((p) => p.id === postId);
@@ -47,6 +49,10 @@ export default function BlogDetailPage() {
     }
   };
 
+  // 권한 확인: 작성자 또는 관리자
+  const isAuthorOrAdmin =
+    session?.user?.id === post.authorId || session?.user?.role === 'admin';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-12 dark:from-slate-950 dark:to-slate-900">
       <div className="mx-auto max-w-4xl">
@@ -59,20 +65,22 @@ export default function BlogDetailPage() {
             </Button>
           </Link>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" title="수정">
-              <Edit2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleDelete}
-              title="삭제"
-              className="text-red-600 hover:text-red-700 dark:text-red-400"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          {isAuthorOrAdmin && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" title="수정">
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleDelete}
+                title="삭제"
+                className="text-red-600 hover:text-red-700 dark:text-red-400"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* 커버 이미지 */}

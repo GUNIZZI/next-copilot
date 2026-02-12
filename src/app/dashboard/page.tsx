@@ -1,12 +1,68 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import authOptions from '@/auth.config';
+'use client';
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { userService, blogService } from '@/shared/services/firebase.service';
+
+interface DashboardStats {
+  totalMembers: number;
+  totalPosts: number;
+  totalViews: number;
+  activeMembers: number;
+}
+
+export default function DashboardPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalMembers: 0,
+    totalPosts: 0,
+    totalViews: 0,
+    activeMembers: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    } else if (session?.user?.role !== 'admin') {
+      router.push('/');
+    } else {
+      loadStats();
+    }
+  }, [status, router, session]);
+
+  const loadStats = async () => {
+    try {
+      setLoading(true);
+      // Firebase에서 통계 데이터 로드
+      const users = await userService.getAllUsers();
+      const posts = await blogService.getAllPosts();
+
+      setStats({
+        totalMembers: users.length,
+        totalPosts: posts.length,
+        totalViews: posts.reduce((sum, post) => sum + post.views, 0),
+        activeMembers: users.filter((u) => u.role === 'admin').length,
+      });
+    } catch (error) {
+      console.error('통계 로드 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (status === 'loading' || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   if (!session) {
-    redirect('/login');
+    return null;
   }
 
   return (
@@ -30,7 +86,7 @@ export default async function DashboardPage() {
                   Total Members
                 </p>
                 <p className="mt-2 text-3xl font-bold text-black dark:text-white">
-                  42
+                  {stats.totalMembers}
                 </p>
               </div>
               <div className="rounded-lg bg-indigo-100 p-3 dark:bg-indigo-900">
@@ -58,7 +114,7 @@ export default async function DashboardPage() {
                   Active Users
                 </p>
                 <p className="mt-2 text-3xl font-bold text-black dark:text-white">
-                  38
+                  {stats.activeMembers}
                 </p>
               </div>
               <div className="rounded-lg bg-green-100 p-3 dark:bg-green-900">
@@ -83,10 +139,10 @@ export default async function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Inactive Users
+                  Total Blog Posts
                 </p>
                 <p className="mt-2 text-3xl font-bold text-black dark:text-white">
-                  4
+                  {stats.totalPosts}
                 </p>
               </div>
               <div className="rounded-lg bg-yellow-100 p-3 dark:bg-yellow-900">

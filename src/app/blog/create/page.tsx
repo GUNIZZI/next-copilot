@@ -2,14 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useBlogStore } from '@/features/blog/model/blog-store';
 import { RichEditor } from '@/features/blog/ui/rich-editor';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { blogService } from '@/shared/services/firebase.service';
 
 export default function CreateBlogPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const { addPost } = useBlogStore();
 
   const [formData, setFormData] = useState({
@@ -23,6 +26,39 @@ export default function CreateBlogPage() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+
+  // 인증된 사용자만 접근 가능
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        로딩 중...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-12 dark:from-slate-950 dark:to-slate-900">
+        <div className="mx-auto max-w-4xl">
+          <Link href="/blog">
+            <Button variant="outline" className="mb-8 gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              돌아가기
+            </Button>
+          </Link>
+
+          <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-600 dark:bg-slate-800">
+            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              로그인이 필요합니다
+            </p>
+            <p className="text-gray-600 dark:text-gray-400">
+              블로그 글 작성은 로그인한 사용자만 가능합니다.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -61,9 +97,8 @@ export default function CreateBlogPage() {
     setIsLoading(true);
 
     try {
-      // 새 글 생성
+      // 새 글 데이터
       const newPost = {
-        id: Date.now().toString(),
         title: formData.title,
         content: formData.content,
         excerpt: formData.excerpt || formData.content.substring(0, 100),
@@ -73,16 +108,22 @@ export default function CreateBlogPage() {
           .split(',')
           .map((tag) => tag.trim())
           .filter(Boolean),
-        authorId: 'user1', // 실제로는 세션에서 가져올 것
+        authorId: session.user?.id || 'unknown',
         createdAt: new Date(),
         updatedAt: new Date(),
         published: formData.published,
         views: 0,
       };
 
-      addPost(newPost);
+      // Firebase에 저장
+      const postId = await blogService.createPost(newPost);
 
-      // 성공 메시지 및 리다이렉트
+      // 로컬 상태에도 추가
+      addPost({
+        ...newPost,
+        id: postId,
+      });
+
       alert('글이 저장되었습니다!');
       router.push('/blog');
     } catch (error) {

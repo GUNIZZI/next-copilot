@@ -1,6 +1,6 @@
 'use client';
 
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { Session } from 'next-auth';
@@ -9,16 +9,22 @@ interface NavbarProps {
   session: Session | null;
 }
 
-export function Navbar({ session }: NavbarProps) {
+export function Navbar({ session: initialSession }: NavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { data: sessionData } = useSession();
+
+  // 세션 상태: useSession이 있으면 그것을 사용, 없으면 초기값 사용
+  const session = sessionData || initialSession;
 
   const isActive = (href: string) => pathname === href;
 
   const handleLogout = async () => {
     await signOut({ redirect: false });
     router.refresh();
-    router.push('/login');
+    setTimeout(() => {
+      router.push('/login');
+    }, 100);
   };
 
   return (

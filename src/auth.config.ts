@@ -1,6 +1,9 @@
 import bcrypt from 'bcryptjs';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
+import GitHubProvider from 'next-auth/providers/github';
 import type { NextAuthOptions } from 'next-auth';
+import { userService } from '@/shared/services/firebase.service';
 
 declare module 'next-auth' {
   interface User {
@@ -15,23 +18,7 @@ declare module 'next-auth' {
   }
 }
 
-// Mock users database
-const users = [
-  {
-    id: '1',
-    email: 'admin@example.com',
-    name: 'Admin User',
-    password: bcrypt.hashSync('password123', 10), // password: "password123"
-    role: 'admin',
-  },
-  {
-    id: '2',
-    email: 'user@example.com',
-    name: 'Normal User',
-    password: bcrypt.hashSync('password123', 10),
-    role: 'user',
-  },
-];
+// Firebase 사용자만 사용
 
 const authOptions: NextAuthOptions = {
   pages: {
@@ -49,34 +36,82 @@ const authOptions: NextAuthOptions = {
           throw new Error('Invalid credentials');
         }
 
-        const user = users.find((u) => u.email === credentials.email);
-        if (!user) {
-          throw new Error('User not found');
+        try {
+          // Firebase에서 사용자 조회
+          const user = await userService.getUserByEmail(credentials.email);
+
+          if (
+            user &&
+            userService.verifyPassword(
+              credentials.password as string,
+              user.passwordHash
+            )
+          ) {
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+            };
+          }
+
+          throw new Error('Invalid credentials');
+        } catch (error) {
+          console.error('인증 오류:', error);
+          throw new Error('Authentication failed');
         }
-
-        const passwordMatch = bcrypt.compareSync(
-          credentials.password as string,
-          user.password
-        );
-
-        if (!passwordMatch) {
-          throw new Error('Invalid password');
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
       },
+    }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    }),
+    GitHubProvider({
+      clientId: process.env.GITHUB_CLIENT_ID || '',
+      clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      // OAuth 로그인 (Google, GitHub)
+      if (account?.provider === 'google' || account?.provider === 'github') {
+        try {
+          // 기존 사용자인지 확인
+          const existingUser = await userService.getUserByEmail(
+            user.email || ''
+          );
+
+          if (!existingUser) {
+            // 새 사용자 생성 (role: user)
+            await userService.createUser({
+              name: user.name || user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+              password: 'oauth_' + Math.random().toString(36).slice(2), // OAuth 사용자는 더미 비밀번호
+              role: 'user', // SNS 로그인 사용자는 일반 유저
+            });
+          }
+        } catch (error) {
+          console.error('OAuth 사용자 저장 오류:', error);
+          return false;
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+      } else if (token.email) {
+        // OAuth 로그인 후 역할 정보 추가
+        try {
+          const dbUser = await userService.getUserByEmail(token.email);
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+          }
+        } catch (error) {
+          console.error('사용자 정보 조회 오류:', error);
+        }
       }
       return token;
     },
